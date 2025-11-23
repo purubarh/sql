@@ -7,9 +7,9 @@ We tell them, no problem! We can produce a list with all of the appropriate deta
 
 Using the following syntax you create our super cool and not at all needy manager a list:
 
-SELECT 
-product_name || ', ' || product_size|| ' (' || product_qty_type || ')'
-FROM product
+SELECT
+COALESCE(product_name, ' ') || ', ' || COALESCE(product_size, '')|| ' (' || COALESCE(product_qty_type, 'unit') || ')'
+FROM product;
 
 
 But wait! The product table has some bad data (a few NULL values). 
@@ -33,6 +33,13 @@ You can either display all rows in the customer_purchases table, with the counte
 each new market date for each customer, or select only the unique market dates per customer 
 (without purchase details) and number those visits. 
 HINT: One of these approaches uses ROW_NUMBER() and one uses DENSE_RANK(). */
+SELECT *, 
+ROW_NUMBER () OVER (PARTITION BY customer_id ORDER BY market_date) AS customer_visit_number
+FROM customer_purchases
+
+SELECT *, 
+DENSE_RANK () OVER (PARTITION BY customer_id ORDER BY market_date) AS customer_visit_number
+FROM customer_purchases
 
 
 
@@ -40,11 +47,23 @@ HINT: One of these approaches uses ROW_NUMBER() and one uses DENSE_RANK(). */
 then write another query that uses this one as a subquery (or temp table) and filters the results to 
 only the customer’s most recent visit. */
 
+SELECT *, 
+DENSE_RANK () OVER (PARTITION BY customer_id ORDER BY market_date DESC) AS customer_visit_number
+FROM customer_purchases
 
+SELECT customer_id, market_date, transaction_time, customer_visit_number, transaction_time_rank  
+FROM (
+	SELECT *, 
+	DENSE_RANK () OVER (PARTITION BY customer_id ORDER BY market_date DESC) AS customer_visit_number,
+	ROW_NUMBER() OVER (PARTITION BY customer_id, market_date ORDER BY transaction_time ASC) AS transaction_time_rank
+	FROM customer_purchases cp) x
+WHERE x.customer_visit_number = 1 AND x.transaction_time_rank =1;
 
 /* 3. Using a COUNT() window function, include a value along with each row of the 
 customer_purchases table that indicates how many different times that customer has purchased that product_id. */
-
+SELECT *, 
+COUNT () OVER (PARTITION BY customer_id, product_id) AS number_of_times_product_purchased
+FROM customer_purchases;
 
 
 -- String manipulations
@@ -59,11 +78,26 @@ Remove any trailing or leading whitespaces. Don't just use a case statement for 
 
 Hint: you might need to use INSTR(product_name,'-') to find the hyphens. INSTR will help split the column. */
 
-
+SELECT product_name, product_size,
+CASE
+	WHEN instr(product_name, '-') > 0
+    THEN
+		trim(substr(product_name, instr(product_name, '-') + 1))
+	ELSE NULL
+END AS description
+FROM product;
 
 /* 2. Filter the query to show any product_size value that contain a number with REGEXP. */
 
-
+--REGEXP is not supported by "DB Browser for SQLite". Hence used GLOB
+SELECT product_name, product_size,
+CASE
+	WHEN instr(product_name, '-') > 0
+    THEN
+		trim(substr(product_name, instr(product_name, '-') + 1))
+	ELSE NULL
+END AS description
+FROM product WHERE product_size GLOB '*[0-9]*';
 
 -- UNION
 /* 1. Using a UNION, write a query that displays the market dates with the highest and lowest total sales.
@@ -74,6 +108,28 @@ HINT: There are a possibly a few ways to do this query, but if you're struggling
 "best day" and "worst day"; 
 3) Query the second temp table twice, once for the best day, once for the worst day, 
 with a UNION binding them. */
+
+SELECT * FROM customer_purchases;
+
+CREATE TEMP TABLE  temp_daily_sales AS
+SELECT 
+    market_date,
+    SUM(quantity * cost_to_customer_per_qty) AS total_sales,
+    CASE 
+        WHEN RANK() OVER (ORDER BY SUM(quantity * cost_to_customer_per_qty) DESC) = 1 THEN 'Best Day'
+        WHEN RANK() OVER (ORDER BY SUM(quantity * cost_to_customer_per_qty) ASC)  = 1 THEN 'Worst Day'
+        ELSE 'General day'
+    END AS day_type
+FROM customer_purchases
+GROUP BY market_date
+ORDER BY market_date;
+
+SELECT * from temp_daily_sales;
+
+SELECT market_date, total_sales, day_type  FROM temp_daily_sales WHERE day_type='Best Day'
+UNION
+SELECT market_date, total_sales, day_type  FROM temp_daily_sales WHERE day_type='Worst Day';
+
 
 
 
@@ -90,6 +146,9 @@ Remember, CROSS JOIN will explode your table rows, so CROSS JOIN should likely b
 Think a bit about the row counts: how many distinct vendors, product names are there (x)?
 How many customers are there (y). 
 Before your final group by you should have the product of those two queries (x*y).  */
+
+SELECT DISTINCT(vendor_id) FROM vendor_inventory;
+SELECT DISTINCT(product_id) FROM vendor_inventory
 
 
 
