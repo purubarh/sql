@@ -21,7 +21,9 @@ The `||` values concatenate the columns into strings.
 Edit the appropriate columns -- you're making two edits -- and the NULL rows will be fixed. 
 All the other rows will remain the same. */
 
-
+SELECT
+COALESCE(product_name, ' ') || ', ' || COALESCE(product_size, '')|| ' (' || COALESCE(product_qty_type, 'unit') || ')'
+FROM product;
 
 
 --Windowed Functions
@@ -158,11 +160,21 @@ This table will contain only products where the `product_qty_type = 'unit'`.
 It should use all of the columns from the product table, as well as a new column for the `CURRENT_TIMESTAMP`.  
 Name the timestamp column `snapshot_timestamp`. */
 
+CREATE TABLE product_units AS
+SELECT *,  CURRENT_TIMESTAMP AS snapshot_timestamp
+FROM  product
+WHERE product_qty_type = 'unit';
+
 
 
 /*2. Using `INSERT`, add a new row to the product_units table (with an updated timestamp). 
 This can be any product you desire (e.g. add another record for Apple Pie). */
+INSERT INTO product_units (
+		product_id, product_name, product_size, product_category_id, product_qty_type, snapshot_timestamp)
+VALUES (
+		999, 'Apple Pie(New)', 'small', 1, 'unit', CURRENT_TIMESTAMP);
 
+SELECT * FROM product_units;
 
 
 -- DELETE
@@ -170,7 +182,8 @@ This can be any product you desire (e.g. add another record for Apple Pie). */
 
 HINT: If you don't specify a WHERE clause, you are going to have a bad time.*/
 
-
+DELETE FROM product_units WHERE product_name = 'Apple Pie';
+SELECT * FROM product_units;
 
 -- UPDATE
 /* 1.We want to add the current_quantity to the product_units table. 
@@ -189,6 +202,18 @@ Finally, make sure you have a WHERE statement to update the right row,
 	you'll need to use product_units.product_id to refer to the correct row within the product_units table. 
 When you have all of these components, you can run the update statement. */
 
+ALTER TABLE product_units
+ADD current_quantity INT;
 
+SELECT * FROM product_units;
+
+SELECT quantity, product_id,
+ROW_NUMBER() OVER(PARTITION BY product_id) AS quantity_row
+FROM vendor_inventory
+--ORDER BY product_id ASC, quantity_row DESC;
+
+
+
+SELECT quantity, product_id FROM vendor_inventory;
 
 
